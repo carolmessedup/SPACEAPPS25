@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>NASA Image Explorer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"></script>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #000; color: #fff; }
+    h1 { text-align: center; padding: 10px; }
+    #openseadragon { width: 100%; height: 85vh; }
+    #controls {
+      display: flex;
+      justify-content: center;
+      padding: 10px;
+      gap: 10px;
+      position: relative;
+    }
+    input, button {
+      padding: 6px 10px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: none;
+    }
+    button {
+      cursor: pointer;
+      background: #444;
+      color: white;
+    }
+    .label {
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 4px 6px;
+      border-radius: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .region {
+      border: 2px dashed red;
+      position: absolute;
+      pointer-events: none;
+    }
+    .point {
+      width: 12px;
+      height: 12px;
+      background: red;
+      border-radius: 50%;
+      position: absolute;
+      pointer-events: none;
+    }
+    #searchResults {
+      position: absolute;
+      top: 40px;
+      background: #222;
+      color: #fff;
+      max-height: 150px;
+      overflow-y: auto;
+      display: none;
+      z-index: 1000;
+      border-radius: 5px;
+      width: 200px;
+    }
+    #searchResults div:hover {
+      background: #444;
+    }
+  </style>
+</head>
+<body>
+  <h1>NASA Image Explorer (Andromeda)</h1>
+
+  <div id="controls">
+    <input type="text" id="searchBox" placeholder="Search label..." oninput="updateSearchResults()">
+    <div id="searchResults"></div>
+    <button onclick="enableLabelMode()">Add Label / Region</button>
+  </div>
+
+  <div id="openseadragon"></div>
+
+  <script>
+    const viewer = OpenSeadragon({
+      id: "openseadragon",
+      prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+      tileSources: "static/heic1502a_dzi.dzi"
+    });
+
+    let labels = [];
+    let addingLabel = false;
+    let startPoint = null;
+    let tempRect = null;
+
+    function disableGestures() {
+      viewer.gestureSettingsMouse = {
+        clickToZoom: false,
+        dblClickToZoom: false,
+        dragToPan: false,
+        scrollToZoom: false,
+        pinchToZoom: false,
+        flickEnabled: false
+      };
+    }
+
+    function enableGestures() {
+      viewer.gestureSettingsMouse = {
+        clickToZoom: true,
+        dblClickToZoom: true,
+        dragToPan: true,
+        scrollToZoom: true,
+        pinchToZoom: true,
+        flickEnabled: true
+      };
+    }
+
+    function enableLabelMode() {
+      addingLabel = true;
+      disableGestures();
+      alert("Click for a point label, or click-and-drag for a rectangle region label.");
+    }
+
+    // Start drawing
+    viewer.addHandler("canvas-press", function(event) {
+      if (!addingLabel) return;
+      startPoint = viewer.viewport.pointFromPixel(event.position);
+
+      // Temporary rectangle for visual feedback
+      tempRect = document.createElement("div");
+      tempRect.className = "region";
+      viewer.addOverlay({ element: tempRect, location: new OpenSeadragon.Rect(startPoint.x, startPoint.y, 0, 0) });
+    });
+
+    // Update rectangle while dragging
+    viewer.addHandler("canvas-drag", function(event) {
+      if (!addingLabel || !startPoint || !tempRect) return;
+      const current = viewer.viewport.pointFromPixel(event.position);
+      const x = Math.min(startPoint.x, current.x);
+      const y = Math.min(startPoint.y, current.y);
+      const w = Math.abs(current.x - startPoint.x);
+      const h = Math.abs(current.y - startPoint.y);
+
+      viewer.updateOverlay(tempRect, new OpenSeadragon.Rect(x, y, w, h));
+    });
+
+    // Finish drawing
+    viewer.addHandler("canvas-release", function(event) {
+      if (!addingLabel || !startPoint) return;
+      const endPoint = viewer.viewport.pointFromPixel(event.position);
+
+      const dx = Math.abs(endPoint.x - startPoint.x);
+      const dy = Math.abs(endPoint.y - startPoint.y);
+
+      const isPoint = dx < 0.001 && dy < 0.001;
+
+      const labelName = prompt("Enter label name:");
+      if (!labelName) {
+        viewer.removeOverlay(tempRect);
+        tempRect = null;
+        startPoint = null;
+        addingLabel = false;
+        enableGestures();
+        return;
+      }
+
+      if (isPoint) {
+        // Point overlay
+        const point = document.createElement("div");
+        point.className = "point";
+        viewer.addOverlay({ element: point, location: endPoint });
+
+        // Label next to point
+        const labelElt = document.createElement("div");
+        labelElt.className = "label";
+        labelElt.innerText = labelName;
+        viewer.addOverlay({ element: labelElt, location: new OpenSeadragon.Point(endPoint.x + 0.001, endPoint.y + 0.001) });
+
+        labels.push({ name: labelName, x: endPoint.x, y: endPoint.y, type: "point" });
+        viewer.removeOverlay(tempRect);
+      } else {
+        // Rectangle overlay
+        const x = Math.min(startPoint.x, endPoint.x);
+        const y = Math.min(startPoint.y, endPoint.y);
+        const w = Math.abs(endPoint.x - startPoint.x);
+        const h = Math.abs(endPoint.y - startPoint.y);
+
+        viewer.updateOverlay(tempRect, new OpenSeadragon.Rect(x, y, w, h));
+
+        const labelElt = document.createElement("div");
+        labelElt.className = "label";
+        labelElt.innerText = labelName;
+        viewer.addOverlay({ element: labelElt, location: new OpenSeadragon.Point(x + w/2, y + h/2) });
+
+        labels.push({ name: labelName, x: x + w/2, y: y + h/2, type: "rect", rect: { x, y, w, h } });
+      }
+
+      tempRect = null;
+      startPoint = null;
+      addingLabel = false;
+      enableGestures();
+    });
+
+    // Search autocomplete
+    function updateSearchResults() {
+      const query = document.getElementById("searchBox").value.toLowerCase();
+      const resultsDiv = document.getElementById("searchResults");
+      resultsDiv.innerHTML = '';
+
+      if (query === '') {
+        resultsDiv.style.display = 'none';
+        return;
+      }
+
+      const matches = labels.filter(l => l.name.toLowerCase().includes(query));
+
+      if (matches.length === 0) {
+        resultsDiv.style.display = 'none';
+        return;
+      }
+
+      matches.forEach(l => {
+        const div = document.createElement('div');
+        div.style.padding = '4px';
+        div.style.cursor = 'pointer';
+        div.innerText = l.name;
+
+        div.onclick = () => {
+          viewer.viewport.panTo(new OpenSeadragon.Point(l.x, l.y));
+          viewer.viewport.zoomTo(5);
+          resultsDiv.style.display = 'none';
+          document.getElementById("searchBox").value = l.name;
+        };
+
+        resultsDiv.appendChild(div);
+      });
+
+      resultsDiv.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
