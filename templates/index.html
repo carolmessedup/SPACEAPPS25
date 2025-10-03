@@ -14,7 +14,7 @@
       gap: 10px;
       position: relative;
     }
-    input, button {
+    select, input, button {
       padding: 6px 10px;
       font-size: 14px;
       border-radius: 5px;
@@ -65,9 +65,14 @@
   </style>
 </head>
 <body>
-  <h1>NASA Image Explorer (Andromeda)</h1>
+  <h1>NASA / ESA Gigapixel Image Explorer</h1>
 
   <div id="controls">
+    <select id="imageSelect" onchange="switchImage()">
+      <option value="static/heic1502a_dzi.dzi">Andromeda Galaxy</option>
+      <option value="static/opo0328a_dzi.dzi">Sombrero Galaxy</option>
+      <option value="https://openseadragon.github.io/example-images/duomo/duomo.dzi">Demo: Duomo</option>
+    </select>
     <input type="text" id="searchBox" placeholder="Search label..." oninput="updateSearchResults()">
     <div id="searchResults"></div>
     <button onclick="enableLabelMode()">Add Label / Region</button>
@@ -76,16 +81,22 @@
   <div id="openseadragon"></div>
 
   <script>
-    const viewer = OpenSeadragon({
+    let viewer = OpenSeadragon({
       id: "openseadragon",
       prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
-      tileSources: "static/heic1502a_dzi.dzi"
+      tileSources: document.getElementById("imageSelect").value
     });
 
     let labels = [];
     let addingLabel = false;
     let startPoint = null;
     let tempRect = null;
+
+    function switchImage() {
+      const selected = document.getElementById("imageSelect").value;
+      labels = []; // reset labels for new image
+      viewer.open(selected);
+    }
 
     function disableGestures() {
       viewer.gestureSettingsMouse = {
@@ -120,7 +131,6 @@
       if (!addingLabel) return;
       startPoint = viewer.viewport.pointFromPixel(event.position);
 
-      // Temporary rectangle for visual feedback
       tempRect = document.createElement("div");
       tempRect.className = "region";
       viewer.addOverlay({ element: tempRect, location: new OpenSeadragon.Rect(startPoint.x, startPoint.y, 0, 0) });
@@ -159,12 +169,10 @@
       }
 
       if (isPoint) {
-        // Point overlay
         const point = document.createElement("div");
         point.className = "point";
         viewer.addOverlay({ element: point, location: endPoint });
 
-        // Label next to point
         const labelElt = document.createElement("div");
         labelElt.className = "label";
         labelElt.innerText = labelName;
@@ -173,7 +181,6 @@
         labels.push({ name: labelName, x: endPoint.x, y: endPoint.y, type: "point" });
         viewer.removeOverlay(tempRect);
       } else {
-        // Rectangle overlay
         const x = Math.min(startPoint.x, endPoint.x);
         const y = Math.min(startPoint.y, endPoint.y);
         const w = Math.abs(endPoint.x - startPoint.x);
