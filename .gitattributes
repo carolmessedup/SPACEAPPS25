@@ -1,2 +1,5 @@
+imagedata/opo0328a.tif filter=lfs diff=lfs merge=lfs -text
+imagedata/heic1502a.psb filter=lfs diff=lfs merge=lfs -text
+imagedata/heic1502a.tif filter=lfs diff=lfs merge=lfs -text
 *.psb filter=lfs diff=lfs merge=lfs -text
 *.tif filter=lfs diff=lfs merge=lfs -text
